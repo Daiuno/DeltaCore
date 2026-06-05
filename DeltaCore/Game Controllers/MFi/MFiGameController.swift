@@ -63,6 +63,9 @@ extension MFiGameController
         
         case start
         case select
+        
+        case leftThumbstickButton
+        case rightThumbstickButton
     }
 }
 
@@ -116,10 +119,12 @@ public class MFiGameController: NSObject, GameController
         }
     }
     
+    public var deadZone: Float = 0.0
+    
     public let inputType: GameControllerInputType = .mfi
         
     public private(set) lazy var defaultInputMapping: GameControllerInputMappingProtocol? = {
-        guard let fileURL = Bundle.resources.url(forResource: "MFiGameController", withExtension: "deltamapping") else {
+        guard let fileURL = Bundle.resources.url(forResource: "MFiGameController", withExtension: "keymapping") else {
             fatalError("MFiGameController.deltamapping does not exist.")
         }
         
@@ -159,7 +164,11 @@ public class MFiGameController: NSObject, GameController
             switch value
             {
             case ..<0:
-                self.activate(input1, value: Double(-value))
+                if abs(value) > deadZone {
+                    self.activate(input1, value: Double(-value))
+                } else {
+                    print("忽略输入:\(input1.stringValue) value: \(-value) deadZone:\(deadZone)")
+                }
                 self.deactivate(input2)
                 
             case 0:
@@ -168,7 +177,11 @@ public class MFiGameController: NSObject, GameController
                 
             default:
                 self.deactivate(input1)
-                self.activate(input2, value: Double(value))
+                if abs(value) > deadZone {
+                    self.activate(input2, value: Double(value))
+                } else {
+                    print("忽略输入:\(input2.stringValue) value: \(value) deadZone:\(deadZone)")
+                }
             }
         }
         
@@ -182,6 +195,9 @@ public class MFiGameController: NSObject, GameController
         profile.buttons[GCInputLeftTrigger]?.pressedChangedHandler = { (button, value, pressed) in inputChangedHandler(.leftTrigger, pressed) }
         profile.buttons[GCInputRightShoulder]?.pressedChangedHandler = { (button, value, pressed) in inputChangedHandler(.rightShoulder, pressed) }
         profile.buttons[GCInputRightTrigger]?.pressedChangedHandler = { (button, value, pressed) in inputChangedHandler(.rightTrigger, pressed) }
+        
+        profile.buttons[GCInputLeftThumbstickButton]?.pressedChangedHandler = { (button, value, pressed) in inputChangedHandler(.leftThumbstickButton, pressed) }
+        profile.buttons[GCInputRightThumbstickButton]?.pressedChangedHandler = { (button, value, pressed) in inputChangedHandler(.rightThumbstickButton, pressed) }
         
         // Menu = Primary menu button (Start/+/Menu)
         let menuButton = profile.buttons[GCInputButtonMenu]

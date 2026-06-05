@@ -17,7 +17,7 @@ public struct GameControllerInputMapping: GameControllerInputMappingProtocol, Co
         return self.inputMappings.keys.map { AnyInput(stringValue: $0, intValue: nil, type: .controller(self.gameControllerInputType)) }
     }
     
-    private var inputMappings: [String: AnyInput]
+    public var inputMappings: [String: AnyInput]
     
     public init(gameControllerInputType: GameControllerInputType)
     {
@@ -37,7 +37,7 @@ public struct GameControllerInputMapping: GameControllerInputMappingProtocol, Co
 
 public extension GameControllerInputMapping
 {
-    init(fileURL: URL) throws
+    public init(fileURL: URL) throws
     {
         let data = try Data(contentsOf: fileURL)
         
@@ -45,10 +45,10 @@ public extension GameControllerInputMapping
         self = try decoder.decode(GameControllerInputMapping.self, from: data)
     }
     
-    func write(to url: URL) throws
+    public func write(to url: URL) throws
     {
         let encoder = PropertyListEncoder()
-        
+        encoder.outputFormat = .xml
         let data = try encoder.encode(self)
         try data.write(to: url)
     }
@@ -56,7 +56,7 @@ public extension GameControllerInputMapping
 
 public extension GameControllerInputMapping
 {
-    mutating func set(_ input: Input?, forControllerInput controllerInput: Input)
+    public mutating func set(_ input: Input?, forControllerInput controllerInput: Input)
     {
         precondition(controllerInput.type == .controller(self.gameControllerInputType), "controllerInput.type must match GameControllerInputMapping.gameControllerInputType")
         

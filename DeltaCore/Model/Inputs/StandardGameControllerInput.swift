@@ -16,11 +16,59 @@ public extension GameControllerInputType
 public enum StandardGameControllerInput: String, Codable
 {
     case menu
-    
+    //自定义
+    case flex
+    case quickSave
+    case quickLoad
+    case fastForward
+    case toggleFastForward
+    case reverseScreens //bindable
+    case volume //bindable
+    case saveStates
+    case cheatCodes
+    case skins
+    case filters
+    case screenshot
+    case haptics
+    case controllers
+    case orientation
+    case functionLayout
+    case restart
+    case resolution
+    case quit
+    case amiibo
+    case homeMenu
+    case airplay
+    case toggleControlls //bindable
+    case blowing
+    case palette
+    case swapDisk
+    case retroAchievements
+    case airPlayScaling
+    case airPlayLayout
+    case toggleAnalog //bindable
+    case gameplayManuals
+    case triggerPro
+    case fastForward2x
+    case fastForward3x
+    case fastForward4x
+    case tvType//Color or BW bindable
+    case leftDifficulty // A or B bindable
+    case rightDifficulty //A or B bindable
+    case screenScaling
+    case j2meSettings
+    case dosSettings
+    case insertDisc
+
     case up
     case down
     case left
     case right
+    
+    case rightDpadUp
+    case rightDpadDown
+    case rightDpadLeft
+    case rightDpadRight
     
     case leftThumbstickUp
     case leftThumbstickDown
@@ -34,16 +82,20 @@ public enum StandardGameControllerInput: String, Codable
     
     case a
     case b
+    case c
     case x
     case y
+    case z
     
     case start
     case select
     
+    case l
     case l1
     case l2
     case l3
     
+    case r
     case r1
     case r2
     case r3
@@ -79,7 +131,7 @@ public extension StandardGameControllerInput
         
         guard
             let deltaCore = Delta.core(for: gameType),
-            let fileURL = deltaCore.resourceBundle.url(forResource: "Standard", withExtension: "deltamapping")
+            let fileURL = deltaCore.resourceBundle.url(forResource: deltaCore.name, withExtension: "keymapping")
         else { fatalError("Cannot find Standard.deltamapping for game type \(gameType)") }
         
         do

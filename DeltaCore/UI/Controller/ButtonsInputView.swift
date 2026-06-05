@@ -8,9 +8,17 @@
 
 import UIKit
 
+var ButtonInputsPointMapping = [AnyInput: CGPoint]()
+
 class ButtonsInputView: UIView
 {
     var isHapticFeedbackEnabled = true
+    //添加震感的样式
+    var hapticFeedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle = .soft {
+        didSet {
+            feedbackGenerator = UIImpactFeedbackGenerator(style: hapticFeedbackStyle)
+        }
+    }
     
     var items: [ControllerSkin.Item]?
     
@@ -28,7 +36,7 @@ class ButtonsInputView: UIView
     
     private let imageView = UIImageView(frame: .zero)
     
-    private let feedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private var feedbackGenerator = UIImpactFeedbackGenerator(style: .soft)
     
     private var touchInputsMappingDictionary: [UITouch: Set<AnyInput>] = [:]
     private var previousTouchInputs = Set<AnyInput>()
@@ -108,11 +116,22 @@ extension ButtonsInputView
         {
             guard item.extendedFrame.contains(point) else { continue }
             
+            if self.isHidden {
+                //如果隐藏状态下只允许menu和flex按钮可以点击
+                if case .standard(let itemInputs) = item.inputs, itemInputs.contains(where: { $0.stringValue == "menu" || $0.stringValue == "flex" }) {
+                    inputs.append(contentsOf: itemInputs)
+                    return inputs
+                } else {
+                    return inputs
+                }
+            }
+            
             switch item.inputs
             {
             // Don't return inputs for thumbsticks or touch screens since they're handled separately.
             case .directional where item.kind == .thumbstick: break
             case .touch: break
+            case .switch: break
                 
             case .standard(let itemInputs):
                 inputs.append(contentsOf: itemInputs)

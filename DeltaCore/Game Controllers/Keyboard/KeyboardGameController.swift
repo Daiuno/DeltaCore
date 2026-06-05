@@ -75,7 +75,7 @@ public class KeyboardGameController: UIResponder, GameController
     public let inputType: GameControllerInputType = .keyboard
     
     public private(set) lazy var defaultInputMapping: GameControllerInputMappingProtocol? = {
-        guard let fileURL = Bundle.resources.url(forResource: "KeyboardGameController", withExtension: "deltamapping") else {
+        guard let fileURL = Bundle.resources.url(forResource: "KeyboardGameController", withExtension: "keymapping") else {
             fatalError("KeyboardGameController.deltamapping does not exist.")
         }
         
@@ -94,6 +94,8 @@ public class KeyboardGameController: UIResponder, GameController
     
     // When non-nil, uses modern keyboard handling.
     private let keyboard: GCKeyboard?
+    
+    public var keyboardPress: ((_ key: String)->Void)? = nil
     
     public init(keyboard: GCKeyboard?)
     {
@@ -177,6 +179,7 @@ public extension KeyboardGameController
         
         for press in presses
         {
+            keyboardPress?(press.key)
             let input = Input(press.key)
             self.activate(input)
         }

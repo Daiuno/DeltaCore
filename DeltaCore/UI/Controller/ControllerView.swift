@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import AudioToolbox
 
 private struct ControllerViewInputMapping: GameControllerInputMappingProtocol
 {
@@ -58,6 +59,11 @@ public class ControllerView: UIView, GameController
         didSet {
             self.updateControllerSkin()
             NotificationCenter.default.post(name: ControllerView.controllerViewDidChangeControllerSkinNotification, object: self)
+            if let skin = controllerSkin as? ControllerSkin, let soundID = skin.soundID {
+                self.soundID = soundID
+            } else {
+                self.soundID = nil
+            }
         }
     }
     
@@ -95,7 +101,30 @@ public class ControllerView: UIView, GameController
     
     public var isThumbstickHapticFeedbackEnabled = true {
         didSet {
-            self.thumbstickViews.values.forEach { $0.isHapticFeedbackEnabled = self.isThumbstickHapticFeedbackEnabled }
+            thumbstickViews.values.forEach { $0.isHapticFeedbackEnabled = isThumbstickHapticFeedbackEnabled }
+            switchViews.values.forEach{ $0.isHapticFeedbackEnabled = isThumbstickHapticFeedbackEnabled }
+        }
+    }
+    
+    //添加震感的样式
+    public var hapticFeedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle = .soft {
+        didSet {
+            buttonsView.hapticFeedbackStyle = hapticFeedbackStyle
+            thumbstickViews.values.forEach { $0.hapticFeedbackStyle = hapticFeedbackStyle }
+            switchViews.values.forEach { $0.hapticFeedbackStyle = hapticFeedbackStyle }
+        }
+    }
+    
+    public var isIncludeSwitch: Bool { switchViews.count > 0 }
+    public func updateSwitchState(_ inputs: [String: Bool]) {
+        if switchViews.count > 0 {
+            inputs.forEach { inputString, on in
+                self.switchViews.forEach { itemID, switchView in
+                    if switchView.input.stringValue == inputString {
+                        switchView.state = on
+                    }
+                }
+            }
         }
     }
     
@@ -117,6 +146,7 @@ public class ControllerView: UIView, GameController
     internal weak var appPlacementLayoutGuide: UILayoutGuide? {
         didSet {
             self.controllerDebugView.appPlacementLayoutGuide = self.appPlacementLayoutGuide
+            self.buttonsDynamicEffectView.appPlacementLayoutGuide = self.appPlacementLayoutGuide
         }
     }
     
@@ -136,13 +166,14 @@ public class ControllerView: UIView, GameController
     private var gameViewsByScreenID = [ControllerSkin.Screen.ID: GameView]()
     
     //MARK: - Private Properties
-    private let contentView = UIView(frame: .zero)
+    public let contentView = UIView(frame: .zero)
     private var transitionSnapshotView: UIView? = nil
     private let controllerDebugView = ControllerDebugView()
-    
+    private let buttonsDynamicEffectView = ButtonsDynamicEffectView()
     private let buttonsView = ButtonsInputView(frame: CGRect.zero)
     private var thumbstickViews = [ControllerSkin.Item.ID: ThumbstickInputView]()
     private var touchViews = [ControllerSkin.Item.ID: TouchInputView]()
+    private var switchViews = [ControllerSkin.Item.ID: SwitchView]()
     
     private var _performedInitialLayout = false
     private var _delayedUpdatingControllerSkin = false
@@ -150,6 +181,26 @@ public class ControllerView: UIView, GameController
     private var controllerInputView: ControllerInputView?
     
     private(set) var imageCache = NSCache<NSString, NSCache<NSString, UIImage>>()
+    
+    //If enabled, it checks whether the button is pressed. If not, it allows click-through. Default is false; setting it to true may cause performance loss.
+    public var allowTapThroughIfButtonNotHit = false
+    
+    //Keyboard events allowed? Default is yes.
+    public var allowKeyboardEvents = true
+    
+    public var enableSkinSoundEffects: Bool = true
+    
+    //Event interception from external sources: if the closure returns true, it means the external party has intercepted; otherwise, it indicates no intention to intercept.
+    public var activateButtonInputInterception: ((AnyInput)->Bool)? = nil
+    public var deactivateButtonInputInterception: ((AnyInput)->Bool)? = nil
+    
+    private var soundID: SystemSoundID? {
+        didSet {
+            if let oldValue {
+                AudioServicesDisposeSystemSoundID(oldValue)
+            }
+        }
+    }
     
     public override var intrinsicContentSize: CGSize {
         return self.buttonsView.intrinsicContentSize
@@ -189,6 +240,9 @@ public class ControllerView: UIView, GameController
         }
         self.contentView.addSubview(self.buttonsView)
         
+        buttonsDynamicEffectView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(buttonsDynamicEffectView)
+        
         self.controllerDebugView.translatesAutoresizingMaskIntoConstraints = false
         self.contentView.addSubview(self.controllerDebugView)
         
@@ -210,6 +264,11 @@ public class ControllerView: UIView, GameController
                                      self.buttonsView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
                                      self.buttonsView.bottomAnchor.constraint(equalTo: self.contentView.bottomAnchor)])
         
+        NSLayoutConstraint.activate([self.buttonsDynamicEffectView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
+                                     self.buttonsDynamicEffectView.trailingAnchor.constraint(equalTo: self.contentView.trailingAnchor),
+                                     self.buttonsDynamicEffectView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
+                                     self.buttonsDynamicEffectView.bottomAnchor.constraint(equalTo: self.contentView.bottomAnchor)])
+        
         NSLayoutConstraint.activate([self.controllerDebugView.leadingAnchor.constraint(equalTo: self.contentView.leadingAnchor),
                                      self.controllerDebugView.trailingAnchor.constraint(equalTo: self.contentView.trailingAnchor),
                                      self.controllerDebugView.topAnchor.constraint(equalTo: self.contentView.topAnchor),
@@ -221,6 +280,7 @@ public class ControllerView: UIView, GameController
     public override func layoutSubviews()
     {
         self.controllerDebugView.setNeedsLayout()
+        buttonsDynamicEffectView.setNeedsLayout()
         
         super.layoutSubviews()
         
@@ -247,6 +307,13 @@ public class ControllerView: UIView, GameController
             
             let frame = item.frame.scaled(to: containingFrame)
             
+            var animation: ControllerSkin.Item.Animation? = nil
+            if var a = item.animation {
+                a.begin = a.begin.scaled(to: containingFrame)
+                a.end = a.end.scaled(to: containingFrame)
+                animation = a
+            }
+            
             switch item.kind
             {
             case .button, .dPad: break
@@ -266,6 +333,17 @@ public class ControllerView: UIView, GameController
             case .touchScreen:
                 guard let touchView = self.touchViews[item.id] else { continue }
                 touchView.frame = frame
+                
+            case .switchButton:
+                //添加switch控件
+                guard let switchView = switchViews[item.id] else { continue }
+                if (switchView.onImage == nil || switchView.offImage == nil),
+                   let (onImage, offImage) = controllerSkin.switchView(for: item, traits: traits, onImageSize: animation?.end.size ?? frame.size, offImageSize: animation?.begin.size ?? frame.size) {
+                    switchView.onImage = onImage
+                    switchView.offImage = offImage
+                }
+                switchView.animation = animation
+                switchView.frame = frame
             }
         }
         
@@ -283,6 +361,9 @@ public class ControllerView: UIView, GameController
     
     public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView?
     {
+        if !isUserInteractionEnabled {
+            return nil
+        }
         guard self.bounds.contains(point) else { return super.hitTest(point, with: event) }
         
         for (_, thumbstickView) in self.thumbstickViews
@@ -305,7 +386,22 @@ public class ControllerView: UIView, GameController
             }
         }
         
-        return self.buttonsView
+        for (_, switchView) in switchViews
+        {
+            guard switchView.frame.contains(point) else { continue }
+            return switchView
+        }
+        
+        if allowTapThroughIfButtonNotHit {
+            let buttonsViewPoint = buttonsView.convert(point, from: self)
+            if let inputs = buttonsView.inputs(at: buttonsViewPoint), inputs.count > 0 {
+                return buttonsView
+            } else {
+                return nil
+            }
+        }
+        
+        return buttonsView
     }
     
     //MARK: - <UITraitEnvironment>
@@ -328,7 +424,7 @@ extension ControllerView
         
         guard let controllerSkin = self.controllerSkin, let traits = self.controllerSkinTraits else { return false }
         
-        if let keyboardController = ExternalGameControllerManager.shared.keyboardController, keyboardController.playerIndex != nil
+        if let keyboardController = ExternalGameControllerManager.shared.keyboardController 
         {
             // Keyboard is connected and has non-nil player index, so return true to receive keyboard presses.
             return true
@@ -382,6 +478,7 @@ extension ControllerView
     
     internal override func _keyCommand(for event: UIEvent, target: UnsafeMutablePointer<UIResponder>) -> UIKeyCommand?
     {
+        guard allowKeyboardEvents else { return nil }
         let keyCommand = super._keyCommand(for: event, target: target)
         
         if #available(iOS 15, *)
@@ -483,7 +580,11 @@ public extension ControllerView
             }
             
             self.buttonsView.items = items
-            self.controllerDebugView.items = items
+            controllerDebugView.items = items
+            buttonsDynamicEffectView.items = items
+            if let skin = controllerSkin as? ControllerSkin {
+                buttonsDynamicEffectView.archive = skin.archive
+            }
             
             isTranslucent = self.controllerSkin?.isTranslucent(for: traits) ?? false
             
@@ -492,6 +593,9 @@ public extension ControllerView
             
             var touchViews = [ControllerSkin.Item.ID: TouchInputView]()
             var previousTouchViews = self.touchViews
+            
+            var switchViews = [ControllerSkin.Item.ID: SwitchView]()
+            var previousSwitchViews = self.switchViews
             
             for item in items ?? []
             {
@@ -542,6 +646,27 @@ public extension ControllerView
                     }
                     
                     touchViews[item.id] = touchView
+                    
+                case .switchButton:
+                    guard case .switch(let input) = item.inputs else { continue }
+                    let switchView: SwitchView
+                    if let previousSwitchView = previousSwitchViews[item.id] {
+                        switchView = previousSwitchView
+                        previousSwitchViews[item.id] = nil
+                    } else {
+                        switchView = SwitchView(input: input, selfRetracting: item.selfRetracting)
+                        contentView.addSubview(switchView)
+                    }
+                    switchView.valueChangedHandler = { [weak self] input in
+                        guard let self else { return }
+                        activate(input)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: {
+                            self.deactivate(input)
+                        })
+                    }
+                    
+                    switchView.isHapticFeedbackEnabled = isButtonHapticFeedbackEnabled
+                    switchViews[item.id] = switchView
                 }
             }
             
@@ -550,11 +675,17 @@ public extension ControllerView
             
             previousTouchViews.values.forEach { $0.removeFromSuperview() }
             self.touchViews = touchViews
+            
+            previousSwitchViews.values.forEach { $0.removeFromSuperview() }
+            self.switchViews = switchViews
         }
         else
         {
             self.buttonsView.items = nil
             self.controllerDebugView.items = nil
+            
+            thumbstickViews.values.forEach { $0.removeFromSuperview() }
+            thumbstickViews = [:]
             
             self.thumbstickViews.values.forEach { $0.removeFromSuperview() }
             self.thumbstickViews = [:]
@@ -677,6 +808,12 @@ public extension ControllerView
             self.contentView.alpha = 1.0
         }
     }
+    
+    public func handleKeyboardKey(for event: UIEvent) {
+        if #available(iOS 26.0, *) {
+            keyboardResponder.handleKeyboardKey(for: event)
+        }
+    }
 }
 
 private extension ControllerView
@@ -722,7 +859,17 @@ private extension ControllerView
     {
         for input in inputs
         {
-            self.activate(input)
+            if let activateButtonInputInterception {
+                if !activateButtonInputInterception(input) {
+                    activate(input)
+                }
+            } else {
+                activate(input)
+            }
+            buttonsDynamicEffectView.activateButtonEffect(input: input)
+            if let soundID, enableSkinSoundEffects {
+                AudioServicesPlaySystemSound(soundID)
+            }
         }
     }
     
@@ -730,7 +877,14 @@ private extension ControllerView
     {
         for input in inputs
         {
-            self.deactivate(input)
+            if let deactivateButtonInputInterception {
+                if !deactivateButtonInputInterception(input) {
+                    deactivate(input)
+                }
+            } else {
+                deactivate(input)
+            }
+            buttonsDynamicEffectView.deactivateButtonEffect(input: input)
         }
     }
     

@@ -21,6 +21,8 @@ public protocol DeltaCoreProtocol: CustomStringConvertible
     // Should be associated type, but Swift type system makes this difficult, so ¯\_(ツ)_/¯
     var gameInputType: Input.Type { get }
     
+    var allInputs: [Input] { get }
+    
     /* Rendering */
     var audioFormat: AVAudioFormat { get }
     var videoFormat: VideoFormat { get }
@@ -45,9 +47,9 @@ public extension DeltaCoreProtocol
         let bundle = Bundle(for: type(of: self.emulatorBridge))
         #elseif STATIC_LIBRARY || SWIFT_PACKAGE
         let bundle: Bundle
-        if let bundleURL = Bundle.main.url(forResource: self.name, withExtension: "bundle")
-        {
-            bundle = Bundle(url: bundleURL)!
+        
+        if let library = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first {
+            bundle = Bundle(url: URL(fileURLWithPath: library + "/System.bundle"))!
         }
         else
         {

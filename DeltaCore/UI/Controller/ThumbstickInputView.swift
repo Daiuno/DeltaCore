@@ -56,7 +56,13 @@ class ThumbstickInputView: UIView
     private let panGestureRecognizer = ImmediatePanGestureRecognizer(target: nil, action: nil)
     
     private let lightFeedbackGenerator = UISelectionFeedbackGenerator()
-    private let mediumFeedbackGenerator = UIImpactFeedbackGenerator(style: .medium)
+    private var mediumFeedbackGenerator = UIImpactFeedbackGenerator(style: .soft)
+    //添加震感的样式
+    var hapticFeedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle = .soft {
+        didSet {
+            mediumFeedbackGenerator = UIImpactFeedbackGenerator(style: hapticFeedbackStyle)
+        }
+    }
     
     private var isActivated = false
     
@@ -106,7 +112,7 @@ private extension ThumbstickInputView
             
             if self.isHapticFeedbackEnabled
             {
-                self.lightFeedbackGenerator.prepare()
+//                self.lightFeedbackGenerator.prepare()
                 self.mediumFeedbackGenerator.prepare()
             }
             
@@ -188,7 +194,8 @@ private extension ThumbstickInputView
             return
         }
         
-        let maximumDistance = Double(self.bounds.midX)
+//        let maximumDistance = Double(self.bounds.midX)
+        let maximumDistance = Double(self.bounds.midX) * 0.8//Manic修改
         let distance = min(simd_length(point), maximumDistance)
         
         let angle = atan2(point.y, point.x)
@@ -199,7 +206,8 @@ private extension ThumbstickInputView
         var adjustedY = distance * sin(angle)
         adjustedY += center.y
         
-        let insetSideLength = maximumDistance / sqrt(2)
+//        let insetSideLength = maximumDistance / sqrt(2)
+        let insetSideLength = Double(self.bounds.midX)//Manic修改
         let insetFrame = CGRect(x: center.x - insetSideLength / 2,
                                 y: center.y - insetSideLength / 2,
                                 width: insetSideLength,
@@ -243,7 +251,8 @@ private extension ThumbstickInputView
         {
             if isActivated && !self.isActivated && self.isHapticFeedbackEnabled
             {
-                self.lightFeedbackGenerator.selectionChanged()
+//                self.lightFeedbackGenerator.selectionChanged()
+                self.mediumFeedbackGenerator.impactOccurred()
             }
             
             self.previousDirection = nil

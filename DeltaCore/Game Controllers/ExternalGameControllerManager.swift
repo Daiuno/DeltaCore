@@ -29,6 +29,9 @@ public extension Notification.Name
     
     static let externalKeyboardDidConnect = Notification.Name("ExternalKeyboardDidConnect")
     static let externalKeyboardDidDisconnect = Notification.Name("ExternalKeyboardDidDisconnect")
+    
+    static let externalGameControllerDidPress = Notification.Name("ExternalGameControllerDidPressNotification")
+    static let externalGameControllerDidRelease = Notification.Name("ExternalGameControllerDidReleaseNotification")
 }
 
 public class ExternalGameControllerManager: UIResponder
@@ -40,6 +43,18 @@ public class ExternalGameControllerManager: UIResponder
     public private(set) var connectedControllers: [GameController] = []
     
     public var automaticallyAssignsPlayerIndexes: Bool
+    
+    public var forceSetPlayerIndex: Int? = nil
+    
+    public var deadZone: Float = 0.0 {
+        didSet {
+            connectedControllers.forEach {
+                if let mfi = $0 as? MFiGameController {
+                    mfi.deadZone = deadZone
+                }
+            }
+        }
+    }
     
     internal var keyboardController: KeyboardGameController? {
         let keyboardController = self.connectedControllers.lazy.compactMap { $0 as? KeyboardGameController }.first
@@ -60,6 +75,10 @@ public class ExternalGameControllerManager: UIResponder
     }
     
     private var nextAvailablePlayerIndex: Int {
+        //如果设置了强制序号 就所有外设都设置为强制的序号
+        if let forceSetPlayerIndex = forceSetPlayerIndex {
+            return forceSetPlayerIndex
+        }
         var nextPlayerIndex = -1
         
         let sortedGameControllers = self.connectedControllers.sorted { ($0.playerIndex ?? -1) < ($1.playerIndex ?? -1) }
@@ -230,6 +249,7 @@ private extension ExternalGameControllerManager
         guard let controller = notification.object as? GCController else { return }
         
         let externalController = MFiGameController(controller: controller)
+        externalController.deadZone = deadZone
         self.add(externalController)
     }
     

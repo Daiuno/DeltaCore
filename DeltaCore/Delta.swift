@@ -19,9 +19,9 @@ extension GameType: CustomStringConvertible
     }
 }
 
-public extension GameType
-{
-    static let unknown = GameType("com.rileytestut.delta.game.unknown")
+public extension GameType {
+    static let unknown = GameType("public.aoshuang.game.unknown")
+    static let notSupport = GameType("public.aoshuang.game.notSupport")
 }
 
 public struct Delta
@@ -50,9 +50,7 @@ public struct Delta
     }
     
     public static var coresDirectoryURL: URL = {
-        let documentsDirectoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let coresDirectoryURL = documentsDirectoryURL.appendingPathComponent("Cores", isDirectory: true)
-        
+        let coresDirectoryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Cores", isDirectory: true)
         try? FileManager.default.createDirectory(at: coresDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
         return coresDirectoryURL

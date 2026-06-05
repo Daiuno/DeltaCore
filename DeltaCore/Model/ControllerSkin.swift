@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import AudioToolbox
 
 #if FRAMEWORK || STATIC_LIBRARY || SWIFT_PACKAGE
 import ZIPFoundation
@@ -21,7 +22,7 @@ public extension GameControllerInputType
     static let controllerSkin = GameControllerInputType("controllerSkin")
 }
 
-private extension Archive
+extension Archive
 {
     func extract(_ entry: Entry) throws -> Data
     {
@@ -72,9 +73,14 @@ public struct ControllerSkin: ControllerSkinProtocol
     private let representations: [Traits: Representation]
     private let imageCache = NSCache<NSString, UIImage>()
     
-    private let archive: Archive
+    public var isSwapScreen: Bool = false
+    public var isPlayCase: Bool = false
     
-    public init?(fileURL: URL)
+    public var soundID: SystemSoundID? = nil
+    
+    let archive: Archive
+    
+    public init?(fileURL: URL, initGameType: GameType? = nil, supportGameTypes: [GameType]? = nil)
     {
         self.fileURL = fileURL
         
@@ -96,12 +102,26 @@ public struct ControllerSkin: ControllerSkinProtocol
                 let representationsDictionary = info["representations"] as? RepresentationDictionary
             else { return nil }
             
-            #if FRAMEWORK || SWIFT_PACKAGE
+#if FRAMEWORK || SWIFT_PACKAGE
             guard let gameType = info["gameTypeIdentifier"] as? GameType else { return nil }
-            #else
-            guard let gameTypeString = info["gameTypeIdentifier"] as? String else { return nil }
-            let gameType = GameType(gameTypeString)
-            #endif
+#else
+            guard var gameTypeString = info["gameTypeIdentifier"] as? String else { return nil }
+            var gameType: GameType
+            if gameTypeString == "com.rileytestut.delta.game.genesis" {
+                gameType = GameType("public.aoshuang.game.md")
+            } else if gameTypeString == "com.Spookysoft.gamma.game.ps1" {
+                gameType = GameType("public.aoshuang.game.ps1")
+            } else {
+                gameType = GameType(gameTypeString.replacingOccurrences(of: "com.rileytestut.delta", with: "public.aoshuang"))
+            }
+            
+            if let initGameType, let supportGameTypes, gameType != initGameType {
+                if supportGameTypes.contains(where: { $0 == gameType }) {
+                    gameType = initGameType
+                }
+            }
+            
+#endif
             
             self.name = name
             self.identifier = identifier
@@ -125,6 +145,28 @@ public struct ControllerSkin: ControllerSkinProtocol
             
             return nil
         }
+        
+        do {
+            if let soundEntry = archive["sound.caf"] {
+                let soundData = try archive.extract(soundEntry)
+                var soundID: SystemSoundID = 0
+                let soundPath = NSTemporaryDirectory().appending("/sound.caf")
+                let soundUrl = URL(fileURLWithPath: soundPath)
+                if FileManager.default.fileExists(atPath: soundPath) {
+                    try FileManager.default.removeItem(atPath: soundPath)
+                }
+                try soundData.write(to: soundUrl)
+                if FileManager.default.fileExists(atPath: soundPath) {
+                    AudioServicesCreateSystemSoundID(soundUrl as CFURL, &soundID)
+                    if soundID != 0 {
+                        self.soundID = soundID
+                    }
+                }
+            }
+        } catch {
+            print("Delta Core create sound failed: \(error)")
+        }
+        
     }
     
     // Sometimes, recursion really is the best solution ¯\_(ツ)_/¯
@@ -194,7 +236,7 @@ public extension ControllerSkin
     {
         guard
             let deltaCore = Delta.core(for: gameType),
-            let fileURL = deltaCore.resourceBundle.url(forResource: "Standard", withExtension: "deltaskin")
+            let fileURL = deltaCore.resourceBundle.url(forResource: deltaCore.name, withExtension: "manicskin")
         else { return nil }
         
         let controllerSkin = ControllerSkin(fileURL: fileURL)
@@ -309,6 +351,19 @@ public extension ControllerSkin
     func items(for traits: Traits) -> [Item]?
     {
         guard let representation = self.representation(for: traits) else { return nil }
+        
+        if isSwapScreen {
+            //交换触摸屏
+            var items = representation.items
+            for (index, item) in items.enumerated() {
+                if item.kind == .touchScreen, let screens = screens(for: traits), let touchScreenFrame = screens.first( where: { $0.isTouchScreen })?.outputFrame {
+                    items[index].frame = touchScreenFrame
+                    break
+                }
+            }
+            return items
+        }
+        
         return representation.items
     }
     
@@ -327,6 +382,19 @@ public extension ControllerSkin
     func screens(for traits: Traits) -> [ControllerSkin.Screen]?
     {
         guard let representation = self.representation(for: traits) else { return nil }
+        
+        if isSwapScreen {
+            if let screens = representation.screens, screens.count == 2, let first = screens.first, let second = screens.last {
+                var firstScreen = first
+                firstScreen.inputFrame = second.inputFrame
+                var secondScreen = second
+                secondScreen.inputFrame = first.inputFrame
+                firstScreen.isTouchScreen = !first.isTouchScreen
+                secondScreen.isTouchScreen = !second.isTouchScreen
+                return [firstScreen, secondScreen]
+            }
+        }
+        
         return representation.screens
     }
     
@@ -346,6 +414,44 @@ public extension ControllerSkin
     {
         guard let representation = self.representation(for: traits) else { return nil }
         return representation.menuInsets
+    }
+    
+    public func switchView(for item: Item, traits: Traits, onImageSize: CGSize, offImageSize: CGSize) -> (UIImage?, UIImage?)? {
+        guard let representation = self.representation(for: traits) else { return nil }
+        var onImage: UIImage? = nil
+        var offImage: UIImage? = nil
+        var animation: ControllerSkin.Item.Animation? = nil
+        
+        if case let .switch(onImageStr, offImageStr) = item.asset {
+            if let onImageStr, let entry = self.archive[onImageStr], let data = try? self.archive.extract(entry) {
+                switch (onImageStr as NSString).pathExtension.lowercased() {
+                case "pdf":
+                    onImage = UIImage.image(withPDFData: data, targetSize: onImageSize)
+                    
+                default:
+                    onImage = UIImage(data: data, scale: 1.0)
+                }
+            }
+            
+            if let offImageStr, let entry = self.archive[offImageStr], let data = try? self.archive.extract(entry) {
+                switch (offImageStr as NSString).pathExtension.lowercased() {
+                case "pdf":
+                    offImage = UIImage.image(withPDFData: data, targetSize: offImageSize)
+                    
+                default:
+                    offImage = UIImage(data: data, scale: 1.0)
+                }
+            }
+        }
+        if onImage == nil, offImage == nil {
+            return nil
+        } else if onImage == nil {
+            return (offImage, offImage)
+        } else if offImage == nil {
+            return (onImage, onImage)
+        } else {
+            return (onImage, offImage)
+        }
     }
 }
 
@@ -413,6 +519,7 @@ extension ControllerSkin
             case dPad
             case thumbstick
             case touchScreen
+            case switchButton
         }
         
         public enum Inputs
@@ -420,6 +527,7 @@ extension ControllerSkin
             case standard([Input])
             case directional(up: Input, down: Input, left: Input, right: Input)
             case touch(x: Input, y: Input)
+            case `switch`(Input)
             
             public var allInputs: [Input] {
                 switch self
@@ -427,9 +535,28 @@ extension ControllerSkin
                 case .standard(let inputs): return inputs
                 case let .directional(up, down, left, right): return [up, down, left, right]
                 case let .touch(x, y): return [x, y]
+                case .switch(let input): return [input]
                 }
             }
         }
+        
+        public enum Asset {
+            case button(normal: String?, selected: String?)
+            case dpad(normal: String?)
+            case `switch`(on: String?, off: String?)
+        }
+        
+        public struct Animation {
+            var type: String
+            var begin: CGRect
+            var end: CGRect
+        }
+        public var animation: Animation?
+        
+        //switch
+        public var selfRetracting: Bool = true
+        
+        public var asset: Asset?
         
         public var id: String
         
@@ -455,7 +582,7 @@ extension ControllerSkin
             if let inputs = dictionary["inputs"] as? [String]
             {
                 self.kind = .button
-                self.inputs = .standard(inputs.map { AnyInput(stringValue: $0, intValue: nil, type: .controller(.controllerSkin)) })
+                self.inputs = .standard(inputs.map { AnyInput(stringValue: $0, intValue: nil, type: .controller(.controllerSkin), itemID: id) })
             }
             else if let inputs = dictionary["inputs"] as? [String: String]
             {
@@ -481,25 +608,41 @@ extension ControllerSkin
                         isContinuous = false
                     }
                     
-                    self.inputs = .directional(up: AnyInput(stringValue: up, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous),
-                                               down: AnyInput(stringValue: down, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous),
-                                               left: AnyInput(stringValue: left, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous),
-                                               right: AnyInput(stringValue: right, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous))
+                    self.inputs = .directional(up: AnyInput(stringValue: up, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous, itemID: id),
+                                               down: AnyInput(stringValue: down, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous, itemID: id),
+                                               left: AnyInput(stringValue: left, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous, itemID: id),
+                                               right: AnyInput(stringValue: right, intValue: nil, type: .controller(.controllerSkin), isContinuous: isContinuous, itemID: id))
                 }
                 else if let x = inputs["x"], let y = inputs["y"]
                 {
                     self.kind = .touchScreen
-                    self.inputs = .touch(x: AnyInput(stringValue: x, intValue: nil, type: .controller(.controllerSkin), isContinuous: true),
-                                         y: AnyInput(stringValue: y, intValue: nil, type: .controller(.controllerSkin), isContinuous: true))
+                    self.inputs = .touch(x: AnyInput(stringValue: x, intValue: nil, type: .controller(.controllerSkin), isContinuous: true, itemID: id),
+                                         y: AnyInput(stringValue: y, intValue: nil, type: .controller(.controllerSkin), isContinuous: true, itemID: id))
                 }
                 else
                 {
                     return nil
                 }
             }
+            else if let input = dictionary["inputs"] as? String {
+                self.kind = .switchButton
+                self.inputs = .switch(AnyInput(stringValue: input, intValue: nil, type: .controller(.controllerSkin), itemID: id))
+                self.selfRetracting = (dictionary["selfRetracting"] as? Bool) ?? true
+            }
             else
             {
                 return nil
+            }
+            
+            //获取动画配置
+            var tempAnimation: Animation? = nil
+            if let animation = dictionary["animation"] as? [String: Any],
+               let type = animation["type"] as? String,
+               let begin = animation["begin"] as? [String: CGFloat],
+               let beginRect = CGRect(dictionary: begin),
+               let end = animation["end"] as? [String: CGFloat],
+               let endRect = CGRect(dictionary: end) {
+                tempAnimation = Animation(type: type, begin: beginRect, end: endRect)
             }
             
             let overrideExtendedEdges = ExtendedEdges(dictionary: dictionary["extendedEdges"] as? [String: CGFloat])
@@ -533,11 +676,17 @@ extension ControllerSkin
                 let scaleTransform = CGAffineTransform(scaleX: 1.0 / mappingSize.width, y: 1.0 / mappingSize.height)
                 self.frame = frame.applying(scaleTransform)
                 self.extendedFrame = extendedFrame.applying(scaleTransform)
+                if var tempAnimation {
+                    tempAnimation.begin = tempAnimation.begin.applying(scaleTransform)
+                    tempAnimation.end = tempAnimation.end.applying(scaleTransform)
+                    self.animation = tempAnimation
+                }
                 
             case .app:
                 // `app` placement already uses relative values.
                 self.frame = frame
                 self.extendedFrame = extendedFrame
+                self.animation = tempAnimation
             }
         }
     }
@@ -567,6 +716,7 @@ extension ControllerSkin.Item: Hashable
         case .dPad: hasher.combine(1)
         case .thumbstick: hasher.combine(2)
         case .touchScreen: hasher.combine(3)
+        case .switchButton: hasher.combine(4)
         }
         
         hasher.combine(self.thumbstickImageName)
@@ -804,8 +954,18 @@ private extension ControllerSkin
             for (index, dictionary) in zip(0..., itemsArray)
             {
                 let itemID = ControllerSkin.itemID(forSkinID: skinID, traits: traits, index: index)
-                if let item = Item(id: itemID, dictionary: dictionary, extendedEdges: extendedEdges, mappingSize: mappingSize)
+                if var item = Item(id: itemID, dictionary: dictionary, extendedEdges: extendedEdges, mappingSize: mappingSize)
                 {
+                    if let assetDic = dictionary["asset"] as? [String: String] {
+                        //添加按压效果的素材
+                        if item.kind == .button {
+                            item.asset = .button(normal: assetDic["normal"] ?? nil, selected: assetDic["selected"] ?? nil)
+                        } else if item.kind == .dPad {
+                            item.asset = .dpad(normal: assetDic["normal"] ?? nil)
+                        } else if item.kind == .switchButton {
+                            item.asset = .switch(on: assetDic["selected"], off: assetDic["normal"])
+                        }
+                    }
                     items.append(item)
                 }
             }

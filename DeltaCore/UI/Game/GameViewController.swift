@@ -258,8 +258,8 @@ open class GameViewController: UIViewController, GameControllerReceiver
         self.controllerView.beginAnimatingUpdateControllerSkin()
         
         // Disable VideoManager temporarily to prevent random Metal crashes due to rendering while adjusting layout.
-        let isVideoManagerEnabled = self.emulatorCore?.videoManager.isEnabled ?? true
-        self.emulatorCore?.videoManager.isEnabled = false
+        let isVideoManagerEnabled = self.emulatorCore?.videoManager?.isEnabled ?? true
+        self.emulatorCore?.videoManager?.isEnabled = false
         
         // As of iOS 11, the keyboard NSNotifications may return incorrect values for split view controller input view when rotating device.
         // As a workaround, we explicitly resign controllerView as first responder, then restore first responder status after rotation.
@@ -279,7 +279,7 @@ open class GameViewController: UIViewController, GameControllerReceiver
             }
             
             // Re-enable VideoManager if necessary.
-            self.emulatorCore?.videoManager.isEnabled = isVideoManagerEnabled
+            self.emulatorCore?.videoManager?.isEnabled = isVideoManagerEnabled
         }
     }
     
@@ -409,7 +409,7 @@ open class GameViewController: UIViewController, GameControllerReceiver
             // WORKAROUND
             // Sometimes, iOS will cache the rendered image (such as when covered by a UIVisualEffectView), and as a result the game view might appear skewed
             // To compensate, we manually "refresh" the game screen
-            emulatorCore.videoManager.render()
+            emulatorCore.videoManager?.render()
         }
         
         self.setNeedsUpdateOfHomeIndicatorAutoHidden()
@@ -540,8 +540,8 @@ private extension GameViewController
         
         // Toggle audioManager.enabled to reset the audio buffer and ensure the audio isn't delayed from the beginning
         // This is especially noticeable when peeking a game
-        emulatorCore.audioManager.isEnabled = false
-        emulatorCore.audioManager.isEnabled = true
+        emulatorCore.audioManager?.isEnabled = false
+        emulatorCore.audioManager?.isEnabled = true
         
         return self._resumeEmulation()
     }

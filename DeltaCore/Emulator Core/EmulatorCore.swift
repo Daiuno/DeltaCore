@@ -53,14 +53,14 @@ public final class EmulatorCore: NSObject
     public var updateHandler: ((EmulatorCore) -> Void)?
     public var saveHandler: ((EmulatorCore) -> Void)?
     
-    public let audioManager: AudioManager
-    public let videoManager: VideoManager
+    public let audioManager: AudioManager? = nil
+    public let videoManager: VideoManager? = nil
     
     // KVO-Compliant
     @objc public private(set) dynamic var state = State.stopped
     @objc public dynamic var rate = 1.0 {
         didSet {
-            self.audioManager.rate = self.rate
+            self.audioManager?.rate = self.rate
         }
     }
     
@@ -110,17 +110,17 @@ public final class EmulatorCore: NSObject
         self.gameType = self.game.type
         self.gameSaveURL = self.game.gameSaveURL
         
-        var videoFormat = deltaCore.videoFormat
-        if let prefersOpenGLES2 = self.options[.openGLES2] as? Bool, prefersOpenGLES2, videoFormat.format == .openGLES3
-        {
-            // Override core's video format to use OpenGL ES 2.0 instead.
-            videoFormat.format = .openGLES2
-        }
+//        var videoFormat = deltaCore.videoFormat
+//        if let prefersOpenGLES2 = self.options[.openGLES2] as? Bool, prefersOpenGLES2, videoFormat.format == .openGLES3
+//        {
+//            // Override core's video format to use OpenGL ES 2.0 instead.
+//            videoFormat.format = .openGLES2
+//        }
         
         // These were previously lazy variables, but turns out Swift lazy variables are not thread-safe.
         // Since they don't actually need to be lazy, we now explicitly initialize them in the initializer.
-        self.audioManager = AudioManager(audioFormat: deltaCore.audioFormat)
-        self.videoManager = VideoManager(videoFormat: videoFormat, options: options)
+//        self.audioManager = AudioManager(audioFormat: deltaCore.audioFormat)
+//        self.videoManager = VideoManager(videoFormat: videoFormat, options: options)
                 
         super.init()
         
@@ -134,6 +134,8 @@ public extension EmulatorCore
 {
     @discardableResult func start() -> Bool
     {
+        return false
+        
         guard self._state == .stopped else { return false }
         
         self.emulationLock.lock()
@@ -147,7 +149,7 @@ public extension EmulatorCore
             self.save()
         }
         
-        self.audioManager.start()
+        self.audioManager?.start()
         self.deltaCore.emulatorBridge.start(withGameURL: self.game.fileURL)
         self.deltaCore.emulatorBridge.loadGameSave(from: self.gameSaveURL)
         
@@ -161,6 +163,8 @@ public extension EmulatorCore
     
     @discardableResult func stop() -> Bool
     {
+        return false
+        
         guard self._state != .stopped else { return false }
         
         self.emulationLock.lock()
@@ -177,7 +181,7 @@ public extension EmulatorCore
         
         self.save()
         
-        self.audioManager.stop()
+        self.audioManager?.stop()
         self.deltaCore.emulatorBridge.stop()
         
         self.emulationLock.unlock()
@@ -187,6 +191,8 @@ public extension EmulatorCore
     
     @discardableResult func pause() -> Bool
     {
+        return false
+        
         guard self._state == .running else { return false }
         
         self.emulationLock.lock()
@@ -198,7 +204,7 @@ public extension EmulatorCore
         
         self.save()
         
-        self.audioManager.isEnabled = false
+        self.audioManager?.isEnabled = false
         self.deltaCore.emulatorBridge.pause()
         
         self.emulationLock.unlock()
@@ -208,6 +214,8 @@ public extension EmulatorCore
     
     @discardableResult func resume() -> Bool
     {
+        return false
+        
         guard self._state == .paused else { return false }
         
         self.emulationLock.lock()
@@ -215,7 +223,7 @@ public extension EmulatorCore
         self._state = .running
         defer { self.state = self._state }
         
-        self.audioManager.isEnabled = true
+        self.audioManager?.isEnabled = true
         self.deltaCore.emulatorBridge.resume()
         
         self.runGameLoop()
@@ -249,13 +257,13 @@ public extension EmulatorCore
         guard !self.gameViews.contains(gameView) else { return }
         
         self._gameViews.add(gameView)
-        self.videoManager.add(gameView)
+        self.videoManager?.add(gameView)
     }
     
     func remove(_ gameView: GameView)
     {
         self._gameViews.remove(gameView)
-        self.videoManager.remove(gameView)
+        self.videoManager?.remove(gameView)
     }
 }
 
@@ -489,15 +497,15 @@ private extension EmulatorCore
                 // Update audio configurations if necessary.
                 
                 let internalFrameDuration = self.deltaCore.emulatorBridge.frameDuration
-                if internalFrameDuration != self.audioManager.frameDuration
+                if internalFrameDuration != self.audioManager?.frameDuration
                 {
-                    self.audioManager.frameDuration = internalFrameDuration
+                    self.audioManager?.frameDuration = internalFrameDuration
                 }
                 
                 let audioFormat = self.deltaCore.audioFormat
-                if audioFormat != self.audioManager.audioFormat
+                if audioFormat != self.audioManager?.audioFormat
                 {
-                    self.audioManager.audioFormat = audioFormat
+                    self.audioManager?.audioFormat = audioFormat
                 }
                 
                 if counter >= screenRefreshRate
@@ -565,7 +573,7 @@ private extension EmulatorCore
         
         if renderGraphics
         {
-            self.videoManager.render()
+            self.videoManager?.render()
         }
         
         if let dispatchGroup = self.reactivateInputsDispatchGroup

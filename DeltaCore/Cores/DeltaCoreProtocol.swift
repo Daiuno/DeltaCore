@@ -42,6 +42,10 @@ public extension DeltaCoreProtocol
         return nil
     }
     
+    var audioFormat: AVAudioFormat {
+        return AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 44100, channels: 1, interleaved: true)!
+    }
+    
     var resourceBundle: Bundle {
         #if FRAMEWORK
         let bundle = Bundle(for: type(of: self.emulatorBridge))

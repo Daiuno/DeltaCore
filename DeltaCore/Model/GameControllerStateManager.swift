@@ -12,28 +12,37 @@ internal class GameControllerStateManager
 {
     let gameController: GameController
     
-    private(set) var activatedInputs = [AnyInput: Double]()
-    private(set) var sustainedInputs = [AnyInput: Double]()
+    private var _activatedInputs = [AnyInput: Double]()
+    private var _sustainedInputs = [AnyInput: Double]()
     
     var receivers: [GameControllerReceiver] {
-        var objects: [GameControllerReceiver]!
-        
-        self.dispatchQueue.sync {
-            objects = self._receivers.keyEnumerator().allObjects as? [GameControllerReceiver]
-        }
-        
-        return objects
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return snapshotReceiversUnlocked()
     }
 
     private let _receivers = NSMapTable<AnyObject, AnyObject>.weakToStrongObjects()
-    
-    // Used to synchronize access to _receivers to prevent race conditions (yay ObjC)
-    private let dispatchQueue = DispatchQueue(label: "com.rileytestut.Delta.GameControllerStateManager.dispatchQueue")
-    
+    private let stateLock = NSLock()
     
     init(gameController: GameController)
     {
         self.gameController = gameController
+    }
+    
+    func copyActivatedInputs() -> [AnyInput: Double] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _activatedInputs
+    }
+    
+    func copySustainedInputs() -> [AnyInput: Double] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _sustainedInputs
+    }
+    
+    private func snapshotReceiversUnlocked() -> [GameControllerReceiver] {
+        return (_receivers.keyEnumerator().allObjects as? [GameControllerReceiver]) ?? []
     }
 }
 
@@ -41,16 +50,16 @@ extension GameControllerStateManager
 {
     func addReceiver(_ receiver: GameControllerReceiver, inputMapping: GameControllerInputMappingProtocol?)
     {
-        self.dispatchQueue.sync {
-            self._receivers.setObject(inputMapping as AnyObject, forKey: receiver)
-        }
+        stateLock.lock()
+        _receivers.setObject(inputMapping as AnyObject, forKey: receiver)
+        stateLock.unlock()
     }
     
     func removeReceiver(_ receiver: GameControllerReceiver)
     {
-        self.dispatchQueue.sync {
-            self._receivers.removeObject(forKey: receiver)
-        }
+        stateLock.lock()
+        _receivers.removeObject(forKey: receiver)
+        stateLock.unlock()
     }
 }
 
@@ -60,15 +69,29 @@ extension GameControllerStateManager
     {
         precondition(input.type == .controller(self.gameController.inputType), "input.type must match self.gameController.inputType")
         
-        // An input may be "activated" multiple times, such as by pressing different buttons that map to same input, or moving an analog stick.
-        self.activatedInputs[AnyInput(input)] = value
+        var deliveries: [(GameControllerReceiver, Input)] = []
         
-        for receiver in self.receivers
+        stateLock.lock()
+        // An input may be "activated" multiple times, such as by pressing different buttons that map to same input, or moving an analog stick.
+        _activatedInputs[AnyInput(input)] = value
+        for receiver in snapshotReceiversUnlocked()
         {
-            if let mappedInput = self.mappedInput(for: input, receiver: receiver)
+            if let mappedInput = mappedInputUnlocked(for: input, receiver: receiver)
             {
-                receiver.gameController(self.gameController, didActivate: mappedInput, value: value)
+                deliveries.append((receiver, mappedInput))
             }
+        }
+        stateLock.unlock()
+        
+        for (receiver, mappedInput) in deliveries
+        {
+            ExternalInputDispatch.deliverActivate(
+                controller: gameController,
+                receiver: receiver,
+                input: mappedInput,
+                value: value,
+                physicalIsContinuous: input.isContinuous
+            )
         }
     }
     
@@ -76,38 +99,59 @@ extension GameControllerStateManager
     {
         precondition(input.type == .controller(self.gameController.inputType), "input.type must match self.gameController.inputType")
         
-        // Unlike activate(_:), we don't allow an input to be deactivated multiple times.
-        guard self.activatedInputs.keys.contains(AnyInput(input)) else { return }
+        var deliveries: [(GameControllerReceiver, Input)] = []
+        var restoreSustained: Double?
         
-        if let sustainedValue = self.sustainedInputs[AnyInput(input)]
+        stateLock.lock()
+        // Unlike activate(_:), we don't allow an input to be deactivated multiple times.
+        guard _activatedInputs.keys.contains(AnyInput(input)) else {
+            stateLock.unlock()
+            return
+        }
+        
+        if let sustainedValue = _sustainedInputs[AnyInput(input)]
         {
             if input.isContinuous
             {
-                // Input is continuous and currently sustained, so reset value to sustained value.
-                self.activate(input, value: sustainedValue)
+                restoreSustained = sustainedValue
             }
         }
         else
         {
-            // Not sustained, so simply deactivate it.
-            self.activatedInputs[AnyInput(input)] = nil
+            _activatedInputs[AnyInput(input)] = nil
             
-            for receiver in self.receivers
+            for receiver in snapshotReceiversUnlocked()
             {
-                if let mappedInput = self.mappedInput(for: input, receiver: receiver)
+                if let mappedInput = mappedInputUnlocked(for: input, receiver: receiver)
                 {
-                    let hasActivatedMappedControllerInputs = self.activatedInputs.keys.contains {
-                        guard let input = self.mappedInput(for: $0, receiver: receiver) else { return false }
-                        return input == mappedInput
+                    let hasActivatedMappedControllerInputs = _activatedInputs.keys.contains {
+                        guard let mapped = mappedInputUnlocked(for: $0, receiver: receiver) else { return false }
+                        return mapped == mappedInput
                     }
                     
                     if !hasActivatedMappedControllerInputs
                     {
-                        // All controller inputs that map to this input have been deactivated, so we can deactivate the mapped input.
-                        receiver.gameController(self.gameController, didDeactivate: mappedInput)
+                        deliveries.append((receiver, mappedInput))
                     }
                 }
             }
+        }
+        stateLock.unlock()
+        
+        if let sustainedValue = restoreSustained
+        {
+            activate(input, value: sustainedValue)
+            return
+        }
+        
+        for (receiver, mappedInput) in deliveries
+        {
+            ExternalInputDispatch.deliverDeactivate(
+                controller: gameController,
+                receiver: receiver,
+                input: mappedInput,
+                physicalIsContinuous: input.isContinuous
+            )
         }
     }
     
@@ -115,12 +159,19 @@ extension GameControllerStateManager
     {
         precondition(input.type == .controller(self.gameController.inputType), "input.type must match self.gameController.inputType")
         
-        if self.activatedInputs[AnyInput(input)] != value
+        var needsActivate = false
+        stateLock.lock()
+        if _activatedInputs[AnyInput(input)] != value
         {
-            self.activate(input, value: value)
+            needsActivate = true
         }
-
-        self.sustainedInputs[AnyInput(input)] = value
+        _sustainedInputs[AnyInput(input)] = value
+        stateLock.unlock()
+        
+        if needsActivate
+        {
+            activate(input, value: value)
+        }
     }
     
     // Technically not a word, but no good alternative, so ¯\_(ツ)_/¯
@@ -128,9 +179,11 @@ extension GameControllerStateManager
     {
         precondition(input.type == .controller(self.gameController.inputType), "input.type must match self.gameController.inputType")
         
-        self.sustainedInputs[AnyInput(input)] = nil
+        stateLock.lock()
+        _sustainedInputs[AnyInput(input)] = nil
+        stateLock.unlock()
         
-        self.deactivate(AnyInput(input))
+        deactivate(AnyInput(input))
     }
 }
 
@@ -138,15 +191,26 @@ extension GameControllerStateManager
 {
     func inputMapping(for receiver: GameControllerReceiver) -> GameControllerInputMappingProtocol?
     {
-        let inputMapping = self._receivers.object(forKey: receiver) as? GameControllerInputMappingProtocol
-        return inputMapping
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return inputMappingUnlocked(for: receiver)
     }
     
     func mappedInput(for input: Input, receiver: GameControllerReceiver) -> Input?
     {
-        guard let inputMapping = self.inputMapping(for: receiver) else { return input }
-        
-        let mappedInput = inputMapping.input(forControllerInput: input)
-        return mappedInput
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return mappedInputUnlocked(for: input, receiver: receiver)
+    }
+    
+    private func inputMappingUnlocked(for receiver: GameControllerReceiver) -> GameControllerInputMappingProtocol?
+    {
+        return _receivers.object(forKey: receiver) as? GameControllerInputMappingProtocol
+    }
+    
+    private func mappedInputUnlocked(for input: Input, receiver: GameControllerReceiver) -> Input?
+    {
+        guard let inputMapping = inputMappingUnlocked(for: receiver) else { return input }
+        return inputMapping.input(forControllerInput: input)
     }
 }

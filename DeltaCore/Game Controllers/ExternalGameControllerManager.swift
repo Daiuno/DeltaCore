@@ -235,6 +235,8 @@ private extension ExternalGameControllerManager
     {
         guard let index = self.connectedControllers.firstIndex(where: { $0.isEqual(controller) }) else { return }
         
+        NotificationDebouncer.shared.clearKeys(for: controller)
+        AnalogInputCoalescer.shared.cancelPending()
         self.connectedControllers.remove(at: index)
         
         NotificationCenter.default.post(name: .externalGameControllerDidDisconnect, object: controller)

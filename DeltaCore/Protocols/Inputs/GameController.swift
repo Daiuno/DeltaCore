@@ -30,6 +30,8 @@ class NotificationDebouncer {
         let isFirstPress = pressedKeys.insert(key).inserted
         lock.unlock()
         guard isFirstPress else { return }
+        // Always track edges; only FocusKit consumes these notifications.
+        guard ExternalInputDispatch.sink == .focusKit else { return }
         NotificationCenter.default.post(name: .externalGameControllerDidPress, object: nil, userInfo: userInfo)
     }
 
@@ -39,7 +41,15 @@ class NotificationDebouncer {
         let wasPressed = pressedKeys.remove(key) != nil
         lock.unlock()
         guard wasPressed else { return }
+        guard ExternalInputDispatch.sink == .focusKit else { return }
         NotificationCenter.default.post(name: .externalGameControllerDidRelease, object: nil, userInfo: userInfo)
+    }
+
+    func clearKeys(for controller: GameController) {
+        let prefix = "\(ObjectIdentifier(controller))-"
+        lock.lock()
+        pressedKeys = pressedKeys.filter { !$0.hasPrefix(prefix) }
+        lock.unlock()
     }
 }
 
@@ -84,11 +94,11 @@ public extension GameController
     }
     
     var activatedInputs: [AnyInput: Double] {
-        return self.stateManager.activatedInputs
+        return self.stateManager.copyActivatedInputs()
     }
     
     var sustainedInputs: [AnyInput: Double] {
-        return self.stateManager.sustainedInputs
+        return self.stateManager.copySustainedInputs()
     }
 }
 

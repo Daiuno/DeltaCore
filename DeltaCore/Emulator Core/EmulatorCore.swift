@@ -357,6 +357,18 @@ extension EmulatorCore: GameControllerReceiver
 {
     public func gameController(_ gameController: GameController, didActivate controllerInput: Input, value: Double)
     {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.gameController(gameController, didActivate: controllerInput, value: value)
+            }
+            return
+        }
+        
+        // External HID during pause / FocusKit / mapping must not reach cores. On-screen skin is unchanged.
+        if gameController.inputType == .mfi || gameController.inputType == .keyboard {
+            guard ExternalInputDispatch.sink == .gameplay else { return }
+        }
+        
         // Ignore controllers without assigned playerIndex.
         guard let playerIndex = gameController.playerIndex else { return }
         
@@ -446,6 +458,13 @@ extension EmulatorCore: GameControllerReceiver
     
     public func gameController(_ gameController: GameController, didDeactivate input: Input)
     {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.gameController(gameController, didDeactivate: input)
+            }
+            return
+        }
+        
         // Ignore controllers without assigned playerIndex.
         guard let playerIndex = gameController.playerIndex else { return }
         

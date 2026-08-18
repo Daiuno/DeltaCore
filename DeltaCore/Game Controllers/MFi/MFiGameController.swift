@@ -148,6 +148,9 @@ public class MFiGameController: NSObject, GameController
         
         super.init()
         
+        // Must be set before any handlers. Keeps HID off the main thread (Libretro / shader stay on main).
+        self.controller.handlerQueue = ExternalInputDispatch.queue
+        
         let inputChangedHandler: (_ input: MFiGameController.Input, _ pressed: Bool) -> Void = { [unowned self] (input, pressed) in
             if pressed
             {

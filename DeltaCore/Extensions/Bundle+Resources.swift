@@ -14,11 +14,19 @@ extension Bundle
         #if FRAMEWORK
         let bundle = Bundle(for: RingBuffer.self)
         #elseif SWIFT_PACKAGE
-        let bundle = Bundle.module
-        #elseif STATIC_LIBRARY
         let bundle: Bundle
         if let library = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first {
             bundle = Bundle(url: URL(fileURLWithPath: library + "/System.bundle"))!
+        }
+        else
+        {
+            bundle = .main
+        }
+        #elseif STATIC_LIBRARY
+        let bundle: Bundle
+        if let bundleURL = Bundle.main.url(forResource: "DeltaCore", withExtension: "bundle")
+        {
+            bundle = Bundle(url: bundleURL)!
         }
         else
         {

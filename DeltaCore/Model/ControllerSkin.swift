@@ -102,9 +102,6 @@ public struct ControllerSkin: ControllerSkinProtocol
                 let representationsDictionary = info["representations"] as? RepresentationDictionary
             else { return nil }
             
-#if FRAMEWORK || SWIFT_PACKAGE
-            guard let gameType = info["gameTypeIdentifier"] as? GameType else { return nil }
-#else
             guard var gameTypeString = info["gameTypeIdentifier"] as? String else { return nil }
             var gameType: GameType
             if gameTypeString == "com.rileytestut.delta.game.genesis" {
@@ -120,8 +117,6 @@ public struct ControllerSkin: ControllerSkinProtocol
                     gameType = initGameType
                 }
             }
-            
-#endif
             
             self.name = name
             self.identifier = identifier

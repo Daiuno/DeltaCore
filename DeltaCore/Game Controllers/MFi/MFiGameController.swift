@@ -161,27 +161,22 @@ public class MFiGameController: NSObject, GameController
         
         let thumbstickChangedHandler: (_ input1: MFiGameController.Input, _ input2: MFiGameController.Input, _ value: Float) -> Void = { [unowned self] (input1, input2, value) in
             
-            switch value
+            // In the dead zone (including cases where it doesn't precisely return to 0), deactivation must be bidirectional.
+            // Otherwise, the activated direction will never be released, and the edge-triggered notification filter will keep treating it as a held state.
+            if value < 0, abs(value) > deadZone
             {
-            case ..<0:
-                if abs(value) > deadZone {
-                    self.activate(input1, value: Double(-value))
-                } else {
-                    print("忽略输入:\(input1.stringValue) value: \(-value) deadZone:\(deadZone)")
-                }
                 self.deactivate(input2)
-                
-            case 0:
+                self.activate(input1, value: Double(-value))
+            }
+            else if value > 0, abs(value) > deadZone
+            {
+                self.deactivate(input1)
+                self.activate(input2, value: Double(value))
+            }
+            else
+            {
                 self.deactivate(input1)
                 self.deactivate(input2)
-                
-            default:
-                self.deactivate(input1)
-                if abs(value) > deadZone {
-                    self.activate(input2, value: Double(value))
-                } else {
-                    print("忽略输入:\(input2.stringValue) value: \(value) deadZone:\(deadZone)")
-                }
             }
         }
         

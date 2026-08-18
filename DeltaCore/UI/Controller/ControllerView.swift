@@ -106,7 +106,6 @@ public class ControllerView: UIView, GameController
         }
     }
     
-    //添加震感的样式
     public var hapticFeedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle = .soft {
         didSet {
             buttonsView.hapticFeedbackStyle = hapticFeedbackStyle
@@ -186,7 +185,13 @@ public class ControllerView: UIView, GameController
     public var allowTapThroughIfButtonNotHit = false
     
     //Keyboard events allowed? Default is yes.
-    public var allowKeyboardEvents = true
+    //Keyboard paths have been unified to go through GCKeyboard (not via the responder chain), so the switch is synced to
+    //ExternalGameControllerManager unified access control; automatically restored when this view is destroyed, to avoid affecting the next game session.
+    public var allowKeyboardEvents = true {
+        didSet {
+            ExternalGameControllerManager.shared.isKeyboardInputEnabled = allowKeyboardEvents
+        }
+    }
     
     public var enableSkinSoundEffects: Bool = true
     
@@ -206,7 +211,11 @@ public class ControllerView: UIView, GameController
         return self.buttonsView.intrinsicContentSize
     }
     
-    private let keyboardResponder = KeyboardResponder(nextResponder: nil)
+    deinit {
+        if !self.allowKeyboardEvents {
+            ExternalGameControllerManager.shared.isKeyboardInputEnabled = true
+        }
+    }
     
     //MARK: - Initializers -
     /** Initializers **/
@@ -446,17 +455,6 @@ extension ControllerView
         return canBecomeFirstResponder
     }
     
-    public override var next: UIResponder? {
-        if #available(iOS 15, *)
-        {
-            return super.next
-        }
-        else
-        {
-            return KeyboardResponder(nextResponder: super.next)
-        }
-    }
-    
     public override var inputView: UIView? {
         if let keyboardController = ExternalGameControllerManager.shared.keyboardController, keyboardController.playerIndex != nil
         {
@@ -476,18 +474,6 @@ extension ControllerView
         return self.isFirstResponder
     }
     
-    internal override func _keyCommand(for event: UIEvent, target: UnsafeMutablePointer<UIResponder>) -> UIKeyCommand?
-    {
-        guard allowKeyboardEvents else { return nil }
-        let keyCommand = super._keyCommand(for: event, target: target)
-        
-        if #available(iOS 15, *)
-        {
-            _ = self.keyboardResponder._keyCommand(for: event, target: target)
-        }
-        
-        return keyCommand
-    }
 }
 
 //MARK: - Update Skins -
@@ -809,11 +795,6 @@ public extension ControllerView
         }
     }
     
-    public func handleKeyboardKey(for event: UIEvent) {
-        if #available(iOS 26.0, *) {
-            keyboardResponder.handleKeyboardKey(for: event)
-        }
-    }
 }
 
 private extension ControllerView

@@ -10,51 +10,36 @@ import ObjectiveC
 
 private var gameControllerStateManagerKey = 0
 
+// Edge-triggered filter for controller input notifications.
+// 
+// The stick is an analog signal—while held, it keeps firing value-change callbacks at a very high frequency, so "trailing debounce" won't work (new events keep canceling the timer, and the notification might never fire while the stick is held).
+// The semantics here are: when an input first crosses the activation threshold, a press notification is sent **immediately** (zero delay), and holding it down afterward won't resend it; when the input deactivates, it resets and sends a release notification.
+// This matches the hold-dedup logic on the receiving end (FocusKeyObserver / UIControllerKit).
 class NotificationDebouncer {
     static let shared = NotificationDebouncer()
 
-    private struct PendingNotification {
-        let name: Notification.Name
-        let object: Any?
-        let userInfo: [AnyHashable: Any]?
-        let value: Double
-    }
-
-    private var pendingNotifications: [PendingNotification] = []
-    private var workItem: DispatchWorkItem?
-    private let debounceInterval: TimeInterval = 0.1
-    private let queue = DispatchQueue(label: "notification.debouncer")
+    private let lock = NSLock()
+    /// Inputs that have been sent as press but not yet released (distinguished by controller + input dimension)
+    private var pressedKeys = Set<String>()
 
     private init() {}
 
-    func post(name: Notification.Name, value: Double, object: Any? = nil, userInfo: [AnyHashable: Any]? = nil) {
-        queue.async {
-            // 记录本次通知
-            let notification = PendingNotification(name: name, object: object, userInfo: userInfo, value: value)
-            self.pendingNotifications.append(notification)
+    /// Input activated (value has crossed the threshold). First activation triggers a notification immediately; repeated activations while holding are filtered out.
+    func postPress(key: String, userInfo: [AnyHashable: Any]?) {
+        lock.lock()
+        let isFirstPress = pressedKeys.insert(key).inserted
+        lock.unlock()
+        guard isFirstPress else { return }
+        NotificationCenter.default.post(name: .externalGameControllerDidPress, object: nil, userInfo: userInfo)
+    }
 
-            // 取消之前的防抖任务
-            self.workItem?.cancel()
-
-            // 创建新的任务
-            let task = DispatchWorkItem { [weak self] in
-                guard let self = self else { return }
-                // 找到最大值的通知
-                if let maxNotification = self.pendingNotifications.max(by: { $0.value < $1.value }) {
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: maxNotification.name, object: maxNotification.object, userInfo: maxNotification.userInfo)
-                    }
-                }
-                self.queue.async {
-                    self.pendingNotifications.removeAll()
-                    self.workItem = nil
-                }
-            }
-
-            // 保存并调度任务
-            self.workItem = task
-            self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: task)
-        }
+    /// Input release. Only send release if press was previously sent, to avoid a release storm caused by repeated simulated signals.
+    func postRelease(key: String, userInfo: [AnyHashable: Any]?) {
+        lock.lock()
+        let wasPressed = pressedKeys.remove(key) != nil
+        lock.unlock()
+        guard wasPressed else { return }
+        NotificationCenter.default.post(name: .externalGameControllerDidRelease, object: nil, userInfo: userInfo)
     }
 }
 
@@ -128,13 +113,18 @@ public extension GameController
     {
         self.stateManager.activate(input, value: value)
         guard value > 0.5 else { return }
-        NotificationDebouncer.shared.post(name: .externalGameControllerDidPress, value: value, userInfo: ["input": input, "value": value])
+        NotificationDebouncer.shared.postPress(key: self.notificationKey(for: input), userInfo: ["input": input, "value": value])
     }
     
     func deactivate(_ input: Input)
     {
         self.stateManager.deactivate(input)
-        NotificationCenter.default.post(name: .externalGameControllerDidRelease, object: nil, userInfo: ["input": input])
+        NotificationDebouncer.shared.postRelease(key: self.notificationKey(for: input), userInfo: ["input": input])
+    }
+    
+    private func notificationKey(for input: Input) -> String
+    {
+        "\(ObjectIdentifier(self))-\(input.stringValue)"
     }
     
     func sustain(_ input: Input, value: Double = 1.0)

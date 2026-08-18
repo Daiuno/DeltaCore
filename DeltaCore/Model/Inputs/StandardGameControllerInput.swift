@@ -59,6 +59,9 @@ public enum StandardGameControllerInput: String, Codable
     case j2meSettings
     case dosSettings
     case insertDisc
+    //v2.0.0 j2meSettings/dosSettings has been replaced with coreSettings
+    case coreSettings
+    case rewind
 
     case up
     case down

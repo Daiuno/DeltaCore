@@ -62,20 +62,20 @@ public class ExternalGameControllerManager: UIResponder
     }
     
     internal var prefersModernKeyboardHandling: Bool {
-        if ProcessInfo.processInfo.isiOSAppOnMac
-        {
-            // Legacy keyboard handling doesn't work on macOS, so use modern handling instead.
-            // It's still in development, but better than nothing.
-            return true
-        }
-        else
-        {
-            return false
-        }
+        // The keyboard now uniformly goes through GCKeyboard (raw HID key states), and no longer uses the legacy path of the private API handleKeyUIEvent:
+        // 1. The legacy path doesn't work on macOS (isiOSAppOnMac);
+        // 2. The legacy path relies on the responder chain, and when a key combination hits a UIKeyCommand/system shortcut, the event gets consumed by UIKit;
+        // 3. GCKeyboard collects globally, so there's no need for ControllerView to become the first responder.
+        return true
     }
     
+    // Master switch for converting keyboard to game input (corresponds to the role of ControllerView.allowKeyboardEvents in the legacy path).  
+    // Set it to false for scenarios like DOS where the hardware keyboard is handled directly (pressesBegan → LibretroCore),  
+    // to avoid keyboard events also being sent to the game through KeyboardGameController, which would cause duplicate input.
+    public var isKeyboardInputEnabled = true
+    
     private var nextAvailablePlayerIndex: Int {
-        //如果设置了强制序号 就所有外设都设置为强制的序号
+        //If a forced sequence number is set, then all peripherals will be set to that forced sequence number.
         if let forceSetPlayerIndex = forceSetPlayerIndex {
             return forceSetPlayerIndex
         }

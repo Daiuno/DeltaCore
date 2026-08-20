@@ -176,6 +176,8 @@ public class ControllerView: UIView, GameController
     
     private var _performedInitialLayout = false
     private var _delayedUpdatingControllerSkin = false
+    /// Last traits actually applied by `updateControllerSkin()`. Used to refresh the skin when orientation/display traits change without reassigning `controllerSkin`.
+    private var _appliedControllerSkinTraits: ControllerSkin.Traits?
     
     private var controllerInputView: ControllerInputView?
     
@@ -295,14 +297,12 @@ public class ControllerView: UIView, GameController
         
         _performedInitialLayout = true
         
-        guard !_delayedUpdatingControllerSkin else {
+        // Re-apply the skin when traits change (e.g. rotation). Always calling updateControllerSkin()
+        // here would loop because it ends with setNeedsLayout().
+        if _delayedUpdatingControllerSkin || self.controllerSkinTraits != _appliedControllerSkinTraits {
             _delayedUpdatingControllerSkin = false
             self.updateControllerSkin()
-            return
         }
-        
-        // updateControllerSkin() calls layoutSubviews(), so don't call again to avoid infinite loop.
-        // self.updateControllerSkin()
         
         guard let traits = self.controllerSkinTraits, let controllerSkin = self.controllerSkin, let items = controllerSkin.items(for: traits) else { return }
         
@@ -501,6 +501,8 @@ public extension ControllerView
             _delayedUpdatingControllerSkin = true
             return
         }
+        
+        _appliedControllerSkinTraits = self.controllerSkinTraits
 
         if let isDebugModeEnabled = self.controllerSkin?.isDebugModeEnabled
         {

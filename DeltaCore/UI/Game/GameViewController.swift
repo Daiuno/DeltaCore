@@ -271,6 +271,11 @@ open class GameViewController: UIViewController, GameControllerReceiver
         coordinator.animate(alongsideTransition: { (context) in
             self.updateGameViews()
         }) { (context) in
+            // Window bounds (and therefore skin traits) are reliable after the transition.
+            // Reloading here picks the landscape/portrait representation even if controllerSkin was not reassigned.
+            self.controllerView.updateControllerSkin()
+            self.updateGameViews()
+            self.view.setNeedsLayout()
             self.controllerView.finishAnimatingUpdateControllerSkin()
             
             if isControllerViewFirstResponder
@@ -286,6 +291,15 @@ open class GameViewController: UIViewController, GameControllerReceiver
     open override func viewDidLayoutSubviews()
     {
         super.viewDidLayoutSubviews()
+        
+        // Screen count/layout can differ per traits (e.g. dual-screen skins). Refresh game views when traits change.
+        if self.controllerView.controllerSkinTraits != self._previousControllerSkinTraits
+            || self.controllerView.controllerSkin != self._previousControllerSkin
+        {
+            self._previousControllerSkinTraits = self.controllerView.controllerSkinTraits
+            self._previousControllerSkin = self.controllerView.controllerSkin
+            self.updateGameViews()
+        }
         
         let controllerViewFrame: CGRect
         let availableGameFrame: CGRect

@@ -62,6 +62,8 @@ public enum StandardGameControllerInput: String, Codable
     //v2.0.0 j2meSettings/dosSettings has been replaced with coreSettings
     case coreSettings
     case rewind
+    //v2.0.1
+    case slowMotion
 
     case up
     case down

@@ -10,7 +10,8 @@ import Foundation
 
 internal class GameControllerStateManager
 {
-    let gameController: GameController
+    // Associated object on the controller; must not strongly retain it back.
+    unowned let gameController: GameController
     
     private var _activatedInputs = [AnyInput: Double]()
     private var _sustainedInputs = [AnyInput: Double]()

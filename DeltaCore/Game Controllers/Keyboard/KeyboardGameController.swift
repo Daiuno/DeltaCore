@@ -57,7 +57,7 @@ public extension KeyboardGameController.Input
     static let command = KeyboardGameController.Input("command")
     static let option = KeyboardGameController.Input("option")
     static let control = KeyboardGameController.Input("control")
-    static let capsLock = KeyboardGameController.Input("capsLock")
+    static let capsLock = KeyboardGameController.Input("capslock")
     
     static let space = KeyboardGameController.Input("space")
     static let `return` = KeyboardGameController.Input("return")
@@ -112,6 +112,7 @@ public class KeyboardGameController: UIResponder, GameController
         }
     }
     
+    /// Names match `LibretroKeyboardCode` labels / `RETROK_*`. Keys without a RETROK counterpart are ignored.
     private func handleKeyChanged(keyCode: GCKeyCode, isActive: Bool, buttonDescription: String)
     {
         // Scenarios where DOS or other systems handle hardware keyboards directly will turn off this switch;
@@ -129,43 +130,89 @@ public class KeyboardGameController: UIResponder, GameController
             
         case .escape: input = .escape
             
-        case .leftShift, .rightShift: input = .shift
-        case .leftGUI, .rightGUI: input = .command
-        case .leftAlt, .rightAlt: input = .option
-        case .leftControl, .rightControl: input = .control
+        case .leftShift: input = .init("lshift")
+        case .rightShift: input = .init("rshift")
+        case .leftGUI: input = .init("lmeta")
+        case .rightGUI: input = .init("rmeta")
+        case .leftAlt: input = .init("lalt")
+        case .rightAlt: input = .init("ralt")
+        case .leftControl: input = .init("lctrl")
+        case .rightControl: input = .init("rctrl")
         case .capsLock: input = .capsLock
             
         case .spacebar: input = .space
-        case .returnOrEnter, .keypadEnter: input = .return
+        case .returnOrEnter: input = .return
+        case .keypadEnter: input = .init("kpenter")
         case .tab: input = .tab
-        case .deleteOrBackspace: input = .init("delete")
+        case .deleteOrBackspace: input = .init("backspace")
+        case .deleteForward: input = .init("delete")
             
-        case .comma: input = .init(",")
-        case .period, .keypadPeriod: input = .init(".")
-        case .slash, .keypadSlash: input = .init("/")
-        case .semicolon: input = .init(";")
-        case .quote: input = .init("'")
-        case .openBracket: input = .init("[")
-        case .closeBracket: input = .init("]")
-        case .backslash: input = .init("\\")
-        case .nonUSBackslash: input = .init("|")
-        case .hyphen, .keypadHyphen: input = .init("-")
-        case .equalSign, .keypadEqualSign: input = .init("=")
-        case .graveAccentAndTilde: input = .init("`")
+        case .comma: input = .init("comma")
+        case .period: input = .init("period")
+        case .slash: input = .init("slash")
+        case .semicolon: input = .init("semicolon")
+        case .quote: input = .init("quote")
+        case .openBracket: input = .init("leftbracket")
+        case .closeBracket: input = .init("rightbracket")
+        case .backslash: input = .init("backslash")
+        case .nonUSBackslash: input = .init("oem102")
+        case .hyphen: input = .init("minus")
+        case .equalSign: input = .init("equals")
+        case .graveAccentAndTilde: input = .init("backquote")
             
-        case .keypadPlus: input = .init("+")
-        case .keypadAsterisk: input = .init("*")
+        case .F1: input = .init("f1")
+        case .F2: input = .init("f2")
+        case .F3: input = .init("f3")
+        case .F4: input = .init("f4")
+        case .F5: input = .init("f5")
+        case .F6: input = .init("f6")
+        case .F7: input = .init("f7")
+        case .F8: input = .init("f8")
+        case .F9: input = .init("f9")
+        case .F10: input = .init("f10")
+        case .F11: input = .init("f11")
+        case .F12: input = .init("f12")
+        case .F13: input = .init("f13")
+        case .F14: input = .init("f14")
+        case .F15: input = .init("f15")
             
-        case .one, .keypad1: input = .init("1")
-        case .two, .keypad2: input = .init("2")
-        case .three, .keypad3: input = .init("3")
-        case .four, .keypad4: input = .init("4")
-        case .five, .keypad5: input = .init("5")
-        case .six, .keypad6: input = .init("6")
-        case .seven, .keypad7: input = .init("7")
-        case .eight, .keypad8: input = .init("8")
-        case .nine, .keypad9: input = .init("9")
-        case .zero, .keypad0: input = .init("0")
+        case .insert: input = .init("insert")
+        case .home: input = .init("home")
+        case .end: input = .init("end")
+        case .pageUp: input = .init("pageup")
+        case .pageDown: input = .init("pagedown")
+        case .printScreen: input = .init("print")
+        case .scrollLock: input = .init("scrolllock")
+        case .pause: input = .init("pause")
+        case .keypadNumLock: input = .init("numlock")
+            
+        case .keypadPlus: input = .init("kpplus")
+        case .keypadAsterisk: input = .init("kpmultiply")
+        case .keypadHyphen: input = .init("kpminus")
+        case .keypadSlash: input = .init("kpdivide")
+        case .keypadPeriod: input = .init("kpperiod")
+        case .keypadEqualSign: input = .init("kpequals")
+        case .keypad1: input = .init("kp1")
+        case .keypad2: input = .init("kp2")
+        case .keypad3: input = .init("kp3")
+        case .keypad4: input = .init("kp4")
+        case .keypad5: input = .init("kp5")
+        case .keypad6: input = .init("kp6")
+        case .keypad7: input = .init("kp7")
+        case .keypad8: input = .init("kp8")
+        case .keypad9: input = .init("kp9")
+        case .keypad0: input = .init("kp0")
+            
+        case .one: input = .init("1")
+        case .two: input = .init("2")
+        case .three: input = .init("3")
+        case .four: input = .init("4")
+        case .five: input = .init("5")
+        case .six: input = .init("6")
+        case .seven: input = .init("7")
+        case .eight: input = .init("8")
+        case .nine: input = .init("9")
+        case .zero: input = .init("0")
             
         case .keyA: input = .init("a")
         case .keyB: input = .init("b")

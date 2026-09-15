@@ -64,6 +64,9 @@ public enum StandardGameControllerInput: String, Codable
     case rewind
     //v2.0.1
     case slowMotion
+    case wswanRotation
+    case ndsLidToggle
+    case skinButtonBinding
 
     case up
     case down

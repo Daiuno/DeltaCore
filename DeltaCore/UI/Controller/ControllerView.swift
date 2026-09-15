@@ -11,19 +11,21 @@ import AudioToolbox
 
 private struct ControllerViewInputMapping: GameControllerInputMappingProtocol
 {
-    let controllerView: ControllerView
+    // Stored on ControllerView.defaultInputMapping and as the strong map-table value
+    // in GameControllerStateManager; must not retain the view back.
+    private(set) weak var controllerView: ControllerView?
     
     var name: String {
-        return self.controllerView.name
+        return self.controllerView?.name ?? ""
     }
     
     var gameControllerInputType: GameControllerInputType {
-        return self.controllerView.inputType
+        return self.controllerView?.inputType ?? .controllerSkin
     }
     
     func input(forControllerInput controllerInput: Input) -> Input?
     {
-        guard let gameType = self.controllerView.controllerSkin?.gameType, let deltaCore = Delta.core(for: gameType) else { return nil }
+        guard let gameType = self.controllerView?.controllerSkin?.gameType, let deltaCore = Delta.core(for: gameType) else { return nil }
         
         if let gameInput = deltaCore.gameInputType.init(stringValue: controllerInput.stringValue)
         {
@@ -186,15 +188,6 @@ public class ControllerView: UIView, GameController
     //If enabled, it checks whether the button is pressed. If not, it allows click-through. Default is false; setting it to true may cause performance loss.
     public var allowTapThroughIfButtonNotHit = false
     
-    //Keyboard events allowed? Default is yes.
-    //Keyboard paths have been unified to go through GCKeyboard (not via the responder chain), so the switch is synced to
-    //ExternalGameControllerManager unified access control; automatically restored when this view is destroyed, to avoid affecting the next game session.
-    public var allowKeyboardEvents = true {
-        didSet {
-            ExternalGameControllerManager.shared.isKeyboardInputEnabled = allowKeyboardEvents
-        }
-    }
-    
     public var enableSkinSoundEffects: Bool = true
     
     //Event interception from external sources: if the closure returns true, it means the external party has intercepted; otherwise, it indicates no intention to intercept.
@@ -211,12 +204,6 @@ public class ControllerView: UIView, GameController
     
     public override var intrinsicContentSize: CGSize {
         return self.buttonsView.intrinsicContentSize
-    }
-    
-    deinit {
-        if !self.allowKeyboardEvents {
-            ExternalGameControllerManager.shared.isKeyboardInputEnabled = true
-        }
     }
     
     //MARK: - Initializers -

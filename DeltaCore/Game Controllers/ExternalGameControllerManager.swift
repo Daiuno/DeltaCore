@@ -69,7 +69,6 @@ public class ExternalGameControllerManager: UIResponder
         return true
     }
     
-    // Master switch for converting keyboard to game input (corresponds to the role of ControllerView.allowKeyboardEvents in the legacy path).  
     // Set it to false for scenarios like DOS where the hardware keyboard is handled directly (pressesBegan → LibretroCore),  
     // to avoid keyboard events also being sent to the game through KeyboardGameController, which would cause duplicate input.
     public var isKeyboardInputEnabled = true

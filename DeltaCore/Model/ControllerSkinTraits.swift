@@ -8,6 +8,44 @@
 
 import UIKit
 
+var isPhoneDuo: Bool {
+    var isPhoneDuo = false
+#if targetEnvironment(simulator)
+    isPhoneDuo = ProcessInfo().environment["SIMULATOR_MODEL_IDENTIFIER"]! == "iPhone19,4"
+#else
+    var systemInfo = utsname()
+    uname(&systemInfo)
+    
+    let versionCode: String = String(validatingUTF8: NSString(bytes: &systemInfo.machine, length: Int(_SYS_NAMELEN), encoding: String.Encoding.ascii.rawValue)!.utf8String!)!
+    isPhoneDuo = versionCode == "iPhone19,4"
+#endif
+    return isPhoneDuo
+}
+
+var isPhoneDuoOuter: Bool {
+    guard isPhoneDuo else { return false }
+    let screenBounds = UIScreen.main.bounds
+    let screenHeight: Double = max(screenBounds.width, screenBounds.height)
+    return screenHeight == 678
+}
+
+var isPhoneDuoInner: Bool {
+    guard isPhoneDuo else { return false }
+    let screenBounds = UIScreen.main.bounds
+    let screenHeight: Double = max(screenBounds.width, screenBounds.height)
+    return screenHeight == 951
+}
+
+var isPhoneDuoSplitView: Bool {
+    guard isPhoneDuoInner else { return false }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    let scene = scenes.first { $0.activationState == .foregroundActive && $0.session.role == .windowApplication } ?? scenes.first
+    if let window = scene?.keyWindow {
+        return !window.screen.bounds.equalTo(UIScreen.main.bounds)
+    }
+    return false
+}
+
 extension ControllerSkin
 {
     public enum Device: String, CaseIterable
@@ -23,6 +61,7 @@ extension ControllerSkin
         case standard
         case edgeToEdge
         case splitView
+        case duo
     }
 
     public enum Orientation: String, CaseIterable
@@ -103,7 +142,7 @@ extension ControllerSkin
                 else
                 {
                     device = .iphone
-                    displayType = (window.safeAreaInsets.bottom != 0) ? .edgeToEdge : .standard
+                    displayType = isPhoneDuo ? .duo : (window.safeAreaInsets.bottom != 0) ? .edgeToEdge : .standard
                     orientation = (window.bounds.width > window.bounds.height) ? .landscape : .portrait
                 }
             }            

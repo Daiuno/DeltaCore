@@ -45,9 +45,18 @@ public extension ControllerSkinProtocol
         
         while !self.supports(traits)
         {
-            if traits.device == .iphone && traits.displayType == .edgeToEdge
+            if traits.device == .iphone
             {
-                traits.displayType = .standard
+                if traits.displayType == .duo
+                {
+                    traits.device = .ipad
+                    traits.displayType = .standard
+                } else if traits.displayType == .edgeToEdge
+                {
+                    traits.displayType = .standard
+                } else {
+                    return nil
+                }
             }
             else if traits.device == .ipad
             {

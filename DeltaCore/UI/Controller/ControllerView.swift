@@ -108,6 +108,7 @@ public class ControllerView: UIView, GameController
         }
     }
     
+    #if !os(tvOS)
     public var hapticFeedbackStyle: UIImpactFeedbackGenerator.FeedbackStyle = .soft {
         didSet {
             buttonsView.hapticFeedbackStyle = hapticFeedbackStyle
@@ -115,6 +116,7 @@ public class ControllerView: UIView, GameController
             switchViews.values.forEach { $0.hapticFeedbackStyle = hapticFeedbackStyle }
         }
     }
+    #endif
     
     public var isIncludeSwitch: Bool { switchViews.count > 0 }
     public func updateSwitchState(_ inputs: [String: Bool]) {
@@ -244,11 +246,13 @@ public class ControllerView: UIView, GameController
         self.controllerDebugView.translatesAutoresizingMaskIntoConstraints = false
         self.contentView.addSubview(self.controllerDebugView)
         
+        #if !os(tvOS)
         self.isMultipleTouchEnabled = true
         
         // Remove shortcuts from shortcuts bar so it doesn't appear when using external keyboard as input.
         self.inputAssistantItem.leadingBarButtonGroups = []
         self.inputAssistantItem.trailingBarButtonGroups = []
+        #endif
         
         NotificationCenter.default.addObserver(self, selector: #selector(ControllerView.keyboardDidDisconnect(_:)), name: .externalKeyboardDidDisconnect, object: nil)
         

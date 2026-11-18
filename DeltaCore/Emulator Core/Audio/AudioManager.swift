@@ -19,8 +19,13 @@ private extension AVAudioSession
 {
     func setDeltaCategory() throws
     {
+        #if os(tvOS)
+        // Apple TV has no microphone use case; plain playback avoids routing quirks.
+        try AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
+        #else
         try AVAudioSession.sharedInstance().setCategory(.playAndRecord,
                                                         options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay])
+        #endif
     }
 }
 
@@ -352,11 +357,13 @@ private extension AudioManager
             
             do
             {
-                // Explicitly set output port since .defaultToSpeaker option pauses external audio.
+#if !os(tvOS)
+                // The earpiece route exists only on iPhone. tvOS always plays through the television.
                 if AVAudioSession.sharedInstance().currentRoute.isOutputtingToReceiver
                 {
                     try AVAudioSession.sharedInstance().overrideOutputAudioPort(.speaker)
                 }
+#endif
                 
                 try self.audioEngine.start()
                 

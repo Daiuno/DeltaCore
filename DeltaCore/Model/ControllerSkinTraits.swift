@@ -139,6 +139,13 @@ extension ControllerSkin
 //                        orientation = (window.bounds.width > window.bounds.height) ? .landscape : .portrait
 //                    }
                 }
+                else if window.traitCollection.userInterfaceIdiom == .tv
+                {
+                    // tvOS has a fixed landscape display; TV skins only ship landscape representations.
+                    device = .tv
+                    displayType = .standard
+                    orientation = .landscape
+                }
                 else
                 {
                     device = .iphone

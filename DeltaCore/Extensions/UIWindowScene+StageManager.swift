@@ -18,10 +18,14 @@ extension UIWindowScene
 {
     @_spi(Internal)
     public var isStageManagerEnabled: Bool {
+        #if os(tvOS)
+        return false
+        #else
         guard self.responds(to: #selector(getter: UIWindowScenePrivate._enhancedWindowingEnabled)) else { return false }
         
         let windowScene = unsafeBitCast(self, to: UIWindowScenePrivate.self)
         let isStageManagerEnabled = windowScene._enhancedWindowingEnabled
         return isStageManagerEnabled
+        #endif
     }
 }

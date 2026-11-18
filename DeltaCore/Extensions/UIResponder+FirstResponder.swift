@@ -13,7 +13,7 @@ private class FirstResponderEvent: UIEvent
     var firstResponder: UIResponder?
 }
 
-extension UIResponder
+public extension UIResponder
 {
     @objc(delta_firstResponder)
     class var firstResponder: UIResponder? {

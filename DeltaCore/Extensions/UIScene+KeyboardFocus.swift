@@ -22,6 +22,10 @@ extension UIScene
     public static let keyboardFocusDidChangeNotification: Notification.Name = .init("keyboardFocusDidChangeNotification")
     
     public var hasKeyboardFocus: Bool {
+        #if os(tvOS)
+        // Apple TV runs a single full-screen scene that always owns hardware input.
+        return true
+        #else
         guard self.responds(to: #selector(getter: UIScenePrivate._isTargetOfKeyboardEventDeferringEnvironment)) else {
             // Default to true, or else emulation will never resume due to thinking we don't have keyboard focus.
             return true
@@ -36,6 +40,7 @@ extension UIScene
         let scene = unsafeBitCast(self, to: UIScenePrivate.self)
         let hasKeyboardFocus = scene._isTargetOfKeyboardEventDeferringEnvironment
         return hasKeyboardFocus
+        #endif
     }
     
     private var isTrackingKeyboardFocus: Bool {

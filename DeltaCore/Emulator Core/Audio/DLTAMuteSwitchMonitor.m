@@ -41,6 +41,13 @@
         return;
     }
     
+#if TARGET_OS_TV
+    // Apple TV has no ring/silent switch; always report unmuted and never start monitoring.
+    self.isMuted = NO;
+    muteHandler(NO);
+    return;
+#endif
+    
     self.isMonitoring = YES;
     
     __weak __typeof(self) weakSelf = self;

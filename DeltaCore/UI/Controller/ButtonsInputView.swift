@@ -52,7 +52,9 @@ class ButtonsInputView: UIView
     {
         super.init(frame: frame)
         
+        #if !os(tvOS)
         self.isMultipleTouchEnabled = true
+        #endif
         
         self.feedbackGenerator.prepare()
         

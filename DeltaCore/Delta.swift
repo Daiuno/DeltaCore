@@ -28,6 +28,11 @@ public struct Delta
 {
     public private(set) static var registeredCores = [GameType: DeltaCoreProtocol]()
     
+    #if os(tvOS)
+    /// Apple TV has no writable Library; the app sets the folder holding `System.bundle` and `Cores`.
+    public static var libraryPathOverride: String? = nil
+    #endif
+    
     private init()
     {
     }
@@ -50,7 +55,12 @@ public struct Delta
     }
     
     public static var coresDirectoryURL: URL = {
+        #if os(tvOS)
+        let libraryURL = libraryPathOverride.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let coresDirectoryURL = libraryURL.appendingPathComponent("Cores", isDirectory: true)
+        #else
         let coresDirectoryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Cores", isDirectory: true)
+        #endif
         try? FileManager.default.createDirectory(at: coresDirectoryURL, withIntermediateDirectories: true, attributes: nil)
         
         return coresDirectoryURL

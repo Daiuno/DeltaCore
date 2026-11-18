@@ -23,10 +23,14 @@ public extension UIDevice
 {
     var feedbackSupportLevel: FeedbackSupportLevel
     {
+        #if os(tvOS)
+        return .unsupported
+        #else
         guard let rawValue = self.value(forKey: "_feedbackSupportLevel") as? Int else { return .unsupported }
         
         let feedbackSupportLevel = FeedbackSupportLevel(rawValue: rawValue)
         return feedbackSupportLevel ?? .feedbackGenerator // We'll assume raw values greater than 2 still support UIFeedbackGenerator ¯\_(ツ)_/¯
+        #endif
     }
     
     var isVibrationSupported: Bool {
@@ -50,3 +54,24 @@ public extension UIDevice
         }
     }
 }
+
+#if os(tvOS)
+/// tvOS has no haptics; module-internal stand-ins keep the touch controller views compiling unchanged.
+final class UIImpactFeedbackGenerator
+{
+    enum FeedbackStyle: Int
+    {
+        case light, medium, heavy, soft, rigid
+    }
+    
+    init(style: FeedbackStyle = .medium) {}
+    func prepare() {}
+    func impactOccurred() {}
+}
+
+final class UISelectionFeedbackGenerator
+{
+    func prepare() {}
+    func selectionChanged() {}
+}
+#endif

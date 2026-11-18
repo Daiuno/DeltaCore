@@ -6,7 +6,8 @@ import PackageDescription
 let package = Package(
     name: "DeltaCore",
     platforms: [
-        .iOS(.v15)
+        .iOS(.v15),
+        .tvOS(.v15)
     ],
     products: [
         .library(name: "DeltaCore", targets: ["DeltaCore", "CDeltaCore"]),

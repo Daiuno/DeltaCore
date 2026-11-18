@@ -175,20 +175,8 @@ public struct ControllerSkin: ControllerSkinProtocol
             {
                 guard let device = Device(rawValue: key) else { continue }
                 
-                switch device
-                {
-                case .iphone, .ipad:
-                    guard let dictionary = dictionary as? RepresentationDictionary else { continue }
-                    representations.formUnion(self.parsedRepresentations(from: dictionary, skinID: skinID, device: device))
-                    
-                case .tv:
-                    //TODO: Support .portrait orientation for TV skins.
-                    let traits = Traits(device: device, displayType: .standard, orientation: .landscape)
-                    if let representation = Representation(skinID: skinID, traits: traits, dictionary: dictionary)
-                    {
-                        representations.insert(representation)
-                    }
-                }
+                guard let dictionary = dictionary as? RepresentationDictionary else { continue }
+                representations.formUnion(self.parsedRepresentations(from: dictionary, skinID: skinID, device: device))
             }
             else if displayType == nil
             {
@@ -229,9 +217,13 @@ public extension ControllerSkin
 {
     static func standardControllerSkin(for gameType: GameType) -> ControllerSkin?
     {
+        var defaultNameSuffix = ""
+        #if os(tvOS)
+        defaultNameSuffix = "_TV"
+        #endif
         guard
             let deltaCore = Delta.core(for: gameType),
-            let fileURL = deltaCore.resourceBundle.url(forResource: deltaCore.name, withExtension: "manicskin")
+            let fileURL = deltaCore.resourceBundle.url(forResource: deltaCore.name + defaultNameSuffix, withExtension: "manicskin")
         else { return nil }
         
         let controllerSkin = ControllerSkin(fileURL: fileURL)

@@ -7,7 +7,9 @@
 //
 
 import Foundation
+#if !os(tvOS)
 import LocalAuthentication
+#endif
 
 public extension ProcessInfo
 {
@@ -17,6 +19,10 @@ public extension ProcessInfo
     
     // Somewhat expensive to calculate, which can result in dropped touch screen inputs unless we cache value.
     private static let _isRunningOnVisionPro: Bool = {
+#if os(tvOS)
+        // Apple TV has no Optic ID. LocalAuthentication is not in the tvOS SDK.
+        return false
+#else
         // Returns true even when running on iOS :/
         // guard #available(visionOS 1, *) else { return false }
         // return true
@@ -27,5 +33,6 @@ public extension ProcessInfo
         // Can't reference `.opticID` due to bug with #available, so check if .biometryType isn't one of the other types instead.
         let isRunningOnVisionPro = (context.biometryType != .faceID && context.biometryType != .touchID && context.biometryType != .none)
         return isRunningOnVisionPro
+#endif
     }()
 }

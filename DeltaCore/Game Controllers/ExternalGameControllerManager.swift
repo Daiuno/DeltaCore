@@ -80,7 +80,11 @@ public class ExternalGameControllerManager: UIResponder
         }
         var nextPlayerIndex = -1
         
+#if os(tvOS)
+        let sortedGameControllers = self.connectedControllers.filter({ !$0.name.contains("Siri Remote") }).sorted { ($0.playerIndex ?? -1) < ($1.playerIndex ?? -1) }
+#else
         let sortedGameControllers = self.connectedControllers.sorted { ($0.playerIndex ?? -1) < ($1.playerIndex ?? -1) }
+#endif
         for controller in sortedGameControllers
         {
             let playerIndex = controller.playerIndex ?? -1

@@ -52,6 +52,10 @@ public extension DeltaCoreProtocol
         #elseif STATIC_LIBRARY || SWIFT_PACKAGE
         let bundle: Bundle
         
+        #if os(tvOS)
+        let systemTV = Bundle.main.bundleURL.appendingPathComponent("SystemTV", isDirectory: true)
+        bundle = Bundle(url: systemTV) ?? Bundle(for: type(of: self.emulatorBridge))
+        #else
         if let library = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first {
             bundle = Bundle(url: URL(fileURLWithPath: library + "/System.bundle"))!
         }
@@ -59,6 +63,7 @@ public extension DeltaCoreProtocol
         {
             bundle = Bundle(for: type(of: self.emulatorBridge))
         }
+        #endif
         #else
         let bundle = Bundle.main
         #endif
